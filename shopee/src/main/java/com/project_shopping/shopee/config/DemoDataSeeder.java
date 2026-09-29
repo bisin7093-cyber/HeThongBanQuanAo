@@ -42,6 +42,7 @@ import java.util.Map;
 @Component
 public class DemoDataSeeder implements ApplicationRunner {
 
+    private static final int DEMO_RECORD_COUNT = 20;
     private static final List<String> SIZES = List.of("S", "M", "L");
     private static final List<String> COLORS = List.of("Đen", "Trắng");
 
@@ -95,7 +96,57 @@ public class DemoDataSeeder implements ApplicationRunner {
                     "Túi tote canvas",
                     "Phụ kiện",
                     "Túi tote canvas dày dặn, tiện dụng hằng ngày.",
-                    "159000")
+                    "159000"),
+            new ProductSeed(
+                    "Quần kaki slim fit",
+                    "Quần kaki",
+                    "Quần kaki co giãn nhẹ, phù hợp đi làm và đi chơi.",
+                    "459000"),
+            new ProductSeed(
+                    "Áo cardigan dệt kim",
+                    "Áo len",
+                    "Cardigan dệt kim mềm nhẹ, dễ phối nhiều lớp.",
+                    "519000"),
+            new ProductSeed(
+                    "Váy maxi hoa nhí",
+                    "Đầm nữ",
+                    "Váy maxi họa tiết hoa nhí, chất vải nhẹ và thoáng.",
+                    "629000"),
+            new ProductSeed(
+                    "Quần short linen",
+                    "Quần short",
+                    "Quần short linen thoáng mát cho ngày hè năng động.",
+                    "289000"),
+            new ProductSeed(
+                    "Sơ mi linen tay dài",
+                    "Áo sơ mi",
+                    "Sơ mi linen đứng phom, thoáng mát và ít kén dáng.",
+                    "489000"),
+            new ProductSeed(
+                    "Áo croptop cotton",
+                    "Áo thun nữ",
+                    "Áo croptop cotton co giãn, thiết kế tối giản.",
+                    "229000"),
+            new ProductSeed(
+                    "Áo khoác denim classic",
+                    "Áo khoác",
+                    "Áo khoác denim cổ điển, dễ kết hợp với trang phục thường ngày.",
+                    "759000"),
+            new ProductSeed(
+                    "Quần jogger nỉ basic",
+                    "Quần jogger",
+                    "Quần jogger nỉ mềm, cạp chun thoải mái khi vận động.",
+                    "399000"),
+            new ProductSeed(
+                    "Mũ lưỡi trai cotton",
+                    "Phụ kiện",
+                    "Mũ lưỡi trai cotton có khóa điều chỉnh kích thước.",
+                    "189000"),
+            new ProductSeed(
+                    "Áo polo nữ basic",
+                    "Áo polo nữ",
+                    "Áo polo nữ chất cotton thoáng khí, phom dáng gọn gàng.",
+                    "319000")
     );
 
     private static final System.Logger LOGGER =
@@ -149,16 +200,17 @@ public class DemoDataSeeder implements ApplicationRunner {
         List<User> demoUsers = seedDemoCustomers();
         Map<String, Category> categoryIndex = loadCategories();
         List<Product> demoProducts = seedProducts(categoryIndex);
-        seedCarts(demoUsers, demoProducts);
+        int seededCarts = seedCarts(demoUsers, demoProducts);
         int seededOrders = seedOrders(demoUsers, demoProducts);
 
         LOGGER.log(
                 System.Logger.Level.INFO,
-                "Đã khởi tạo dữ liệu mẫu: {0} khách hàng, {1} danh mục, {2} sản phẩm, {3} phân loại và {4} đơn hàng.",
+                "Đã chuẩn bị dữ liệu mẫu: {0} tài khoản mẫu, {1} danh mục, {2} sản phẩm, {3} phân loại, {4} giỏ hàng mới và {5} đơn hàng mới.",
                 demoUsers.size(),
-                seededCategoryCount(),
+                categoryIndex.size(),
                 demoProducts.size(),
                 countSeedVariants(),
+                seededCarts,
                 seededOrders
         );
     }
@@ -172,7 +224,7 @@ public class DemoDataSeeder implements ApplicationRunner {
 
         List<User> demoUsers = new ArrayList<>();
         HashSet<String> seededEmails = new HashSet<>();
-        for (int index = 1; index <= 10; index++) {
+        for (int index = 1; index <= DEMO_RECORD_COUNT; index++) {
             String email = index == 1
                     ? normalizeEmail(demoUserEmail)
                     : "demo-user-%02d@local".formatted(index);
@@ -304,31 +356,44 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .sum();
     }
 
-    private void seedCarts(List<User> demoUsers, List<Product> demoProducts) {
-        if (carts.count() > 0 || demoProducts.isEmpty()) {
-            return;
+    private int seedCarts(List<User> demoUsers, List<Product> demoProducts) {
+        if (demoProducts.isEmpty()) {
+            return 0;
         }
 
+        int createdCarts = 0;
         for (int index = 0; index < demoUsers.size(); index++) {
+            User user = demoUsers.get(index);
+            if (carts.findByUserId(user.getId()).isPresent()) {
+                continue;
+            }
+
             Product product = demoProducts.get(index % demoProducts.size());
             ProductVariant variant = firstAvailableVariant(product);
             if (variant == null) {
                 continue;
             }
 
-            Cart cart = new Cart(demoUsers.get(index));
+            Cart cart = new Cart(user);
             cart.getItems().add(new CartItem(cart, variant, 1));
             carts.save(cart);
+            createdCarts++;
         }
+        return createdCarts;
     }
 
     private int seedOrders(List<User> demoUsers, List<Product> demoProducts) {
-        if (orders.count() > 0 || demoProducts.isEmpty()) {
+        if (demoProducts.isEmpty()) {
             return 0;
         }
 
         int orderCount = 0;
         for (int index = 0; index < demoUsers.size(); index++) {
+            User user = demoUsers.get(index);
+            if (!orders.findAllByUserIdOrderByCreatedAtDesc(user.getId()).isEmpty()) {
+                continue;
+            }
+
             Product product = demoProducts.get(index % demoProducts.size());
             ProductVariant variant = firstAvailableVariant(product);
             if (variant == null) {
@@ -337,7 +402,7 @@ public class DemoDataSeeder implements ApplicationRunner {
 
             OrderStatus status = demoOrderStatus(index);
             CustomerOrder order = createDemoOrder(
-                    demoUsers.get(index),
+                    user,
                     variant,
                     index,
                     status
@@ -364,7 +429,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             int index,
             OrderStatus status) {
 
-        Instant createdAt = Instant.now().minus(Duration.ofDays(20L - index));
+        Instant createdAt = Instant.now().minus(Duration.ofDays(25L - index));
         CustomerOrder order = new CustomerOrder(
                 user,
                 "Địa chỉ mẫu khách hàng %02d, TP. Hồ Chí Minh".formatted(index + 1),
@@ -374,7 +439,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         order.setCreatedAt(createdAt);
         order.setStatus(status);
         order.getItems().add(new OrderItem(order, variant, 1, variant.getPrice()));
-        setOrderTimeline(order, index, createdAt);
+        setOrderTimeline(order, status, createdAt);
 
         Payment payment = new Payment(order, PaymentMethod.COD, order.getTotalAmount());
         if (status == OrderStatus.DELIVERED || status == OrderStatus.COMPLETED) {
@@ -391,37 +456,36 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private void setOrderTimeline(
             CustomerOrder order,
-            int index,
+            OrderStatus status,
             Instant createdAt) {
 
-        if (index >= 2) {
+        if (status == OrderStatus.CONFIRMED
+                || status == OrderStatus.SHIPPING
+                || status == OrderStatus.DELIVERED
+                || status == OrderStatus.COMPLETED) {
             order.setConfirmedAt(createdAt.plus(Duration.ofHours(2)));
         }
-        if (index >= 4) {
+        if (status == OrderStatus.SHIPPING
+                || status == OrderStatus.DELIVERED
+                || status == OrderStatus.COMPLETED) {
             order.setShippingAt(createdAt.plus(Duration.ofDays(1)));
         }
-        if (index >= 6) {
+        if (status == OrderStatus.DELIVERED || status == OrderStatus.COMPLETED) {
             order.setDeliveredAt(createdAt.plus(Duration.ofDays(2)));
         }
-        if (index >= 8) {
+        if (status == OrderStatus.COMPLETED) {
             order.setCustomerConfirmedAt(createdAt.plus(Duration.ofDays(3)));
         }
     }
 
     private OrderStatus demoOrderStatus(int index) {
-        if (index < 2) {
-            return OrderStatus.PENDING;
-        }
-        if (index < 4) {
-            return OrderStatus.CONFIRMED;
-        }
-        if (index < 6) {
-            return OrderStatus.SHIPPING;
-        }
-        if (index < 8) {
-            return OrderStatus.DELIVERED;
-        }
-        return OrderStatus.COMPLETED;
+        return switch (index / (DEMO_RECORD_COUNT / 5)) {
+            case 0 -> OrderStatus.PENDING;
+            case 1 -> OrderStatus.CONFIRMED;
+            case 2 -> OrderStatus.SHIPPING;
+            case 3 -> OrderStatus.DELIVERED;
+            default -> OrderStatus.COMPLETED;
+        };
     }
 
     private Notification createDemoNotification(
@@ -444,13 +508,6 @@ public class DemoDataSeeder implements ApplicationRunner {
         );
         notification.setRead(status == OrderStatus.COMPLETED);
         return notification;
-    }
-
-    private long seededCategoryCount() {
-        return PRODUCT_SEEDS.stream()
-                .map(ProductSeed::categoryName)
-                .distinct()
-                .count();
     }
 
     private String normalizeEmail(String email) {
