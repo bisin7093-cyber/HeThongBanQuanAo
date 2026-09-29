@@ -8,16 +8,25 @@ Open a PowerShell window for the backend:
 
 ```powershell
 cd C:\DAAAN\shopee\shopee
-.\run-backend.ps1
+$env:JAVA_HOME = 'C:\OpenJDK21\jdk-21'
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+$env:DB_USERNAME = 'root'
+$env:DB_PASSWORD = '<your-local-mysql-password>'
+$env:JWT_SECRET = '<a unique random secret of at least 32 bytes>'
+.\mvnw.cmd spring-boot:run
 ```
 
-This starts only Spring Boot. The backend reads its database and application settings from `src/main/resources/application.properties`; start MySQL and ensure the configured `clotherwebsite` database exists. Java 21 at `C:\OpenJDK21\jdk-21` is selected automatically by `run-backend.ps1` when present.
+This starts only Spring Boot. The backend reads the database URL and application defaults from `src/main/resources/application.properties`; credentials and signing secrets come from environment variables. Start MySQL and ensure the configured `clotherwebsite` database exists. If `JWT_SECRET` is omitted, local development uses a newly generated temporary key and existing tokens become invalid after restart. Set a unique stable `JWT_SECRET` for deployments or multiple backend instances.
 
-Clean or build only the backend from this directory; the scripts select Java 21 at `C:\OpenJDK21\jdk-21`:
+At startup, `AdminBootstrap` creates the initial admin when that email does not already exist. Local development defaults are `admin@local` / `123456`; set `ADMIN_EMAIL` and `ADMIN_PASSWORD` to override them. Use a stronger password outside a local development environment.
+
+`DemoDataSeeder` creates 10 local customer accounts (`user@local`, `demo-user-02@local` … `demo-user-10@local`, password `123456` by default), a 10-category clothing catalog, 10 products, and size/color variants. It fills missing seed records on startup without resetting existing product stock or category settings. Override the first sample account with `DEMO_USER_EMAIL` and `DEMO_USER_PASSWORD`, or turn demo seeding off with `BOOTSTRAP_DEMO_DATA=false`. Seeded customers all have the `USER` role. Demo seeding does not create fake carts, orders, payments, or notifications.
+
+Clean or build only the backend from this directory:
 
 ```powershell
-.\clean-backend.ps1
-.\build-backend.ps1
+.\mvnw.cmd clean
+.\mvnw.cmd package -DskipTests
 ```
 
 Frontend is a separate project in `C:\DAAAN\shopee\frontend`; use its own PowerShell window and README.
@@ -33,11 +42,14 @@ Frontend is a separate project in `C:\DAAAN\shopee\frontend`; use its own PowerS
 | USER | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}` | Checkout and view own orders |
 | USER | `GET /api/notifications`, `PUT /api/notifications/{id}/read` | Read own order notifications |
 | ADMIN | `GET/POST /api/admin/products`, `PUT/DELETE /api/admin/products/{id}` | Manage products; delete means deactivate |
+| ADMIN | `GET/POST /api/admin/categories`, `PUT/DELETE /api/admin/categories/{id}` | Manage categories; deleting a category that still has products returns 409 |
 | ADMIN | `POST/PUT/DELETE /api/admin/products/{productId}/variants[/{variantId}]` | Manage product variants |
 | ADMIN | `GET /api/admin/orders`, `GET /api/admin/orders/{id}` | View orders |
 | ADMIN | `PUT /api/admin/orders/{id}/confirm`, `PUT /api/admin/orders/{id}/cancel` | Transition PENDING order; cancel restores stock |
 
 Send the login token as `Authorization: Bearer <accessToken>`. Responses use JSON; validation errors return 400, missing resources 404, conflicts or invalid order transitions 409, unauthenticated requests 401, and role failures 403.
+
+Registration always creates a `USER`; role cannot be selected in the public registration request. `/api/admin/**` requires `ADMIN`, while cart, order, and notification APIs require `USER`. Public product browsing and authentication remain available without a token. The JWT filter reloads the account role from the database for each request, so changing an account role takes effect without trusting a client-supplied role claim.
 
 The product list returns a page object with `items`, `page`, `size`, `totalElements`, `totalPages`, `first`, and `last`. Example home/catalog request:
 
@@ -45,15 +57,31 @@ The product list returns a page object with `items`, `page`, `size`, `totalEleme
 GET /api/products?keyword=ao&category=Áo%20thun&size=M&color=Black&minPrice=100000&maxPrice=500000&inStock=true&page=0&pageSize=12&sort=price_asc
 ```
 
-All filters are optional. `keyword` searches product name and description; `size`, `color`, and `inStock` match a product variant; price bounds apply to the product catalog price. Supported sorts: `newest`, `price_asc`, `price_desc`, `name_asc`, `name_desc`. `pageSize` accepts 1–100. Filter options are queried from active catalog data, so the web UI can render the available choices without hard-coded product values.
+All filters are optional. `keyword` searches product name and description; `size`, `color`, and `inStock` match a product variant; price bounds apply to the product catalog price. Supported sorts: `newest`, `price_asc`, `price_desc`, `name_asc`, `name_desc`. `page` accepts 0–10,000 and `pageSize` accepts 1–100. Filter options are queried from active catalog data, so the web UI can render the available choices without hard-coded product values.
+
+Products must reference an existing active category. The admin product request accepts a `categoryId`; product responses return both `categoryId` and the category display name. For example:
+
+```json
+{
+  "name": "Áo thun basic",
+  "categoryId": 1,
+  "description": "Cotton co giãn",
+  "price": 199000,
+  "imageUrl": "https://example.com/ao-thun.jpg",
+  "status": "ACTIVE"
+}
+```
+
+`GET /api/admin/categories` returns category IDs, descriptions, active state, and product counts. `GET /api/products/categories` remains a public list of category names available in the active storefront. Migration V5 creates the category table, copies existing product category values into it, and links each product to its category.
 
 ## Tables / relationships
 
 ```mermaid
 erDiagram
+  categories ||--o{ products : groups
+  products ||--o{ product_variants : has
   users ||--o| carts : owns
   carts ||--o{ cart_items : contains
-  products ||--o{ product_variants : has
   product_variants ||--o{ cart_items : selected
   users ||--o{ orders : places
   orders ||--|{ order_items : contains
@@ -67,4 +95,4 @@ Checkout locks cart and variant rows and writes the order, order lines, payment 
 
 ## Test coverage
 
-`EcommerceE2ETests` starts an ephemeral H2 database using the test profile. It covers registration/login, product and variant setup, cart, checkout, stock handling, USER/ADMIN authorization, order state changes, notifications, and cross-user access. The production profile remains MySQL 8 and runs the Flyway schema migration.
+The current automated test suite contains a Spring context-load test using an ephemeral H2 database and the `test` profile. It does not yet cover checkout concurrency, authorization scenarios, or complete order lifecycle behavior. The production profile uses MySQL 8 and runs the Flyway schema migrations.

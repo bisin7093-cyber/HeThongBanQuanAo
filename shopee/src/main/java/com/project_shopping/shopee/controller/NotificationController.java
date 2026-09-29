@@ -5,12 +5,34 @@ import com.project_shopping.shopee.service.NotificationService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
-@RestController @RequestMapping("/api/notifications")
+@RestController
+@RequestMapping("/api/notifications")
 public class NotificationController {
- private final NotificationService notifications;
- public NotificationController(NotificationService notifications) { this.notifications=notifications; }
- @GetMapping public List<NotificationResponse> list(@AuthenticationPrincipal UserDetails user) { return notifications.list(user.getUsername()); }
- @PutMapping("/{id}/read") public NotificationResponse markRead(@AuthenticationPrincipal UserDetails user,@PathVariable Long id) { return notifications.markRead(user.getUsername(),id); }
+
+    private final NotificationService notificationService;
+
+    public NotificationController(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
+
+    @GetMapping
+    public List<NotificationResponse> getNotifications(
+            @AuthenticationPrincipal UserDetails user) {
+
+        return notificationService.list(user.getUsername());
+    }
+
+    @PutMapping("/{id}/read")
+    public NotificationResponse markAsRead(
+            @AuthenticationPrincipal UserDetails user,
+            @PathVariable Long id) {
+
+        return notificationService.markRead(
+                user.getUsername(),
+                id
+        );
+    }
 }

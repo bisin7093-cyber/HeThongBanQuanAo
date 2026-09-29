@@ -85,11 +85,6 @@ Mở giao diện tại [http://localhost:5173](http://localhost:5173). Backend A
 
 Trong thư mục backend:
 
-```powershell
-.\clean-backend.ps1
-.\build-backend.ps1
-```
-
 Trong thư mục frontend:
 
 ```powershell
@@ -102,7 +97,6 @@ Build backend hiện bỏ qua test bằng `-DskipTests`; test có thể chạy r
 ## Tài liệu chi tiết
 
 - [Hướng dẫn backend](</C:/DAAAN/shopee/shopee/BACKEND_RUN.md>)
-- [Đặc tả UI và nghiệp vụ frontend](</C:/DAAAN/shopee/frontend/UI_SPEC.md>)
 - [Hướng dẫn frontend](</C:/DAAAN/shopee/frontend/README.md>)
 
 ## Phạm vi hiện tại
