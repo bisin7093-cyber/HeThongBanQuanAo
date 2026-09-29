@@ -32,8 +32,12 @@ SET p.category_id = c.id
 WHERE p.category_id IS NULL;
 
 ALTER TABLE products
-  MODIFY COLUMN category_id BIGINT NOT NULL,
-  ADD INDEX idx_products_category_id (category_id),
+  MODIFY COLUMN category_id BIGINT NOT NULL;
+
+ALTER TABLE products
+  ADD INDEX idx_products_category_id (category_id);
+
+ALTER TABLE products
   ADD CONSTRAINT fk_product_category
     FOREIGN KEY (category_id) REFERENCES categories(id);
 
